@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eesti IT Õppematerjalide Andmebaas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container { max-width: 900px; margin-top: 20px; }
+        .hidden { display: none !important; }
+        .pending-card { border: 2px dashed #ffc107; background-color: #fffbf0; }
+        .badge-pending { background-color: #ffc107; color: #000; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">IT Õppematerjalid</a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" onclick="showSection('search-section')">Otsing</a></li>
+        <li class="nav-item hidden" id="nav-add">
+          <a class="nav-link" onclick="showSection('add-section')">Lisa Materjal</a>
+        </li>
+      </ul>
+      <div class="d-flex align-items-center">
+        <span id="user-info" class="me-3 fw-bold text-primary"></span>
+        <button class="btn btn-outline-primary" onclick="showSection('login-section')" id="btn-login">Logi sisse</button>
+        <button class="btn btn-outline-success ms-2" onclick="showSection('register-section')" id="btn-register">Registreeri</button>
+        <button class="btn btn-outline-danger hidden ms-2" onclick="logout()" id="btn-logout">Logi välja</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+
+    <div id="search-section">
+        <h2 class="mb-4">Materjalide Otsing</h2>
+        <div class="row g-3 mb-4 p-3 bg-light rounded">
+            <div class="col-md-5">
+                <input type="text" class="form-control" id="search-keyword" placeholder="Märksõna...">
+            </div>
+            <div class="col-md-4">
+                <select class="form-select" id="search-category">
+                    <option value="">Kõik kategooriad</option>
+                    <option value="Programmeerimine">Programmeerimine</option>
+                    <option value="Riistvara">Riistvara</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary w-100" onclick="performSearch()">Otsing</button>
+            </div>
+        </div>
+        <div id="results-area"></div>
+    </div>
+
+    <div id="add-section" class="hidden">
+        <h2 class="mb-4">Lisa Uus Materjal</h2>
+        <form id="add-form">
+            <div class="mb-3">
+                <label>Pealkiri *</label>
+                <input type="text" class="form-control" id="add-title" maxlength="100" required>
+            </div>
+            <div class="mb-3">
+                <label>Kirjeldus *</label>
+                <textarea class="form-control" id="add-desc" required></textarea>
+            </div>
+            <div class="mb-3">
+                <label>Kategooria</label>
+                <select class="form-select" id="add-category">
+                    <option value="Programmeerimine">Programmeerimine</option>
+                    <option value="Riistvara">Riistvara</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label>Link</label>
+                <input type="text" class="form-control" id="add-link">
+            </div>
+            <button type="button" class="btn btn-success" onclick="submitMaterial()">Salvestus</button>
+        </form>
+    </div>
+
+    <div id="login-section" class="hidden">
+        <h2>Sisselogimine</h2>
+        <input type="email" id="login-email" class="form-control mb-2" placeholder="E-mail">
+        <input type="password" id="login-password" class="form-control mb-2" placeholder="Parool">
+        <button class="btn btn-primary" onclick="login()">Logi sisse</button>
+        <p class="mt-3 text-muted">Admin demo: admin@kool.ee / admin123</p>
+        <p class="text-muted">Curator demo: curator@kool.ee / curator123</p>
+    </div>
+
+    <div id="register-section" class="hidden">
+        <h2>Registreerimine</h2>
+        <input type="text" id="reg-username" class="form-control mb-2" placeholder="Kasutajanimi">
+        <input type="email" id="reg-email" class="form-control mb-2" placeholder="E-mail">
+        <input type="password" id="reg-pass" class="form-control mb-2" placeholder="Parool">
+        <button class="btn btn-success" onclick="register()">Registreeri</button>
+    </div>
+
+</div>
+
+<script>
+    let currentUserRole = 'Guest'; // Guest, User, Curator, Admin
+
+    function showSection(id) {
+        document.querySelectorAll('.container > div').forEach(div => div.classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    async function performSearch() {
+        const keyword = document.getElementById('search-keyword').value;
+        const category = document.getElementById('search-category').value;
+        const res = await fetch(`/materials?keyword=${keyword}&category=${category}`);
+        const materials = await res.json();
+
+        const area = document.getElementById('results-area');
+        area.innerHTML = '';
+
+        if(materials.length === 0) area.innerHTML = '<p>Materjale ei leitud.</p>';
+
+        materials.forEach(m => {
+            // Если материал не подтвержден, показываем его иначе
+            const isPending = !m.is_confirmed;
+            const cardClass = isPending ? 'card mb-3 pending-card' : 'card mb-3';
+
+            let actionButtons = '';
+
+            // Кнопка подтверждения (Только Curator/Admin) для неподтвержденных
+            if (isPending && (currentUserRole === 'Curator' || currentUserRole === 'Admin')) {
+                actionButtons += `<button class="btn btn-sm btn-success me-2" onclick="approveMaterial(${m.id})">Kinnita</button>`;
+            }
+
+            // Кнопка удаления (Admin или Автор)
+            if (currentUserRole === 'Admin') {
+                actionButtons += `<button class="btn btn-sm btn-danger" onclick="deleteMaterial(${m.id})">Kustuta</button>`;
+            }
+
+            const badge = isPending ? '<span class="badge badge-pending ms-2">Ootab kinnitust</span>' : '';
+
+            const html = `
+                <div class="${cardClass}">
+                    <div class="card-body">
+                        <h5 class="card-title">${m.title} ${badge}</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">${m.category} | Autor: ${m.author}</h6>
+                        <p class="card-text">${m.description}</p>
+                        <a href="${m.link}" target="_blank" class="card-link">Ava link</a>
+                        <div class="mt-2">${actionButtons}</div>
+                    </div>
+                </div>`;
+            area.innerHTML += html;
+        });
+    }
+
+    async function approveMaterial(id) {
+        if(!confirm("Kinnitada materjal?")) return;
+        const res = await fetch(`/materials/${id}/approve`, { method: 'POST' });
+        if(res.ok) performSearch();
+    }
+
+    async function deleteMaterial(id) {
+        if(!confirm("Kustutada?")) return;
+        const res = await fetch(`/materials/${id}`, { method: 'DELETE' });
+        if(res.ok) performSearch();
+    }
+
+    async function submitMaterial() {
+        const title = document.getElementById('add-title').value;
+        const desc = document.getElementById('add-desc').value;
+        const cat = document.getElementById('add-category').value;
+        const link = document.getElementById('add-link').value;
+
+        const res = await fetch('/materials', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ title, description: desc, category: cat, link })
+        });
+        const data = await res.json();
+        if(res.ok) {
+            alert(data.message);
+            showSection('search-section');
+            performSearch();
+        } else {
+            alert("Viga: " + data.error);
+        }
+    }
+
+    async function login() {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const res = await fetch('/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if(res.ok) {
+            currentUserRole = data.role; // Сохраняем роль
+            updateUI(true, data.role);
+            showSection('search-section');
+            performSearch(); // Перезагрузить список (чтобы куратор увидел скрытое)
+        } else {
+            alert("Viga sisselogimisel");
+        }
+    }
+
+    async function logout() {
+        await fetch('/logout', { method: 'POST' });
+        currentUserRole = 'Guest';
+        updateUI(false);
+        showSection('search-section');
+        performSearch();
+    }
+
+    async function register() {
+         // (Аналогично прошлому коду)
+         const username = document.getElementById('reg-username').value;
+         const email = document.getElementById('reg-email').value;
+         const password = document.getElementById('reg-pass').value;
+
+         const res = await fetch('/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ username, email, password })
+        });
+        if(res.ok) { alert("Loodud! Logi sisse."); showSection('login-section'); }
+        else { const d = await res.json(); alert(d.error); }
+    }
+
+    function updateUI(isLoggedIn, role) {
+        const navAdd = document.getElementById('nav-add');
+        const btnLogin = document.getElementById('btn-login');
+        const btnReg = document.getElementById('btn-register');
+        const btnLogout = document.getElementById('btn-logout');
+        const userInfo = document.getElementById('user-info');
+
+        if(isLoggedIn) {
+            btnLogin.classList.add('hidden');
+            btnReg.classList.add('hidden');
+            btnLogout.classList.remove('hidden');
+            navAdd.classList.remove('hidden'); // Кнопка "Добавить" видна
+            userInfo.innerText = `Roll: ${role}`;
+        } else {
+            btnLogin.classList.remove('hidden');
+            btnReg.classList.remove('hidden');
+            btnLogout.classList.add('hidden');
+            navAdd.classList.add('hidden'); // Гость не видит "Добавить"
+            userInfo.innerText = '';
+        }
+    }
+
+    // При загрузке страницы всегда Гость (для простоты примера)
+    updateUI(false);
+    performSearch();
+</script>
+
+</body>
+</html>
