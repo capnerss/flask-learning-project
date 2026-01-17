@@ -1,0 +1,46 @@
+name: Auto-Deploy to Render
+
+# Срабатывает при каждом пуше в ветку main
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Скачиваем ваш код
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # 2. Устанавливаем Python
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10' # Убедитесь, что версия совпадает с вашей
+
+    # 3. Устанавливаем зависимости
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest # Гарантируем, что pytest установлен
+
+    # 4. ЗАПУСК ВАШИХ ТЕСТОВ
+    - name: Run Tests
+      # Устанавливаем фиктивные переменные окружения, чтобы Flask не ругался при импорте
+      env:
+        DATABASE_URL: 'sqlite:///:memory:'
+        SECRET_KEY: test_secret_key_for_ci
+      run: |
+        # Запускаем именно ваш файл с тестами
+        pytest test_full_plan.py
+
+    # 5. ДЕПЛОЙ (Выполняется только если шаг 4 прошел успешно)
+    - name: Trigger Render Deploy
+      if: success()
+      run: |
+        # Отправляем секретный запрос на Render для обновления
+        curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"

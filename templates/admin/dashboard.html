@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4">Admin Panel</h2>
+
+<div class="row">
+    <!-- Управление категориями -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">Kategooriad</div>
+            <div class="card-body">
+                <ul class="list-group mb-3">
+                    {% for c in categories %}
+                        <li class="list-group-item">{{ c.name }}</li>
+                    {% endfor %}
+                </ul>
+                <form action="{{ url_for('admin_add_category') }}" method="POST" class="d-flex">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="name" class="form-control me-2" placeholder="Uus kategooria" required>
+                    <button type="submit" class="btn btn-success">Lisa</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Управление пользователями -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-dark text-white">Kasutajad</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Kasutajanimi</th>
+                                <th>Email</th>
+                                <th>Roll</th>
+                                <th>Tegevus</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in users %}
+                            <tr>
+                                <td>{{ u.username }}</td>
+                                <td>{{ u.email }}</td>
+                                <td>
+                                    <span class="badge {% if u.role == 'Admin' %}bg-danger{% elif u.role == 'Curator' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ u.role }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if u.role != 'Admin' %}
+                                        <div class="d-flex gap-2 flex-wrap">
+                                            <form action="{{ url_for('admin_toggle_role', user_id=u.id) }}" method="POST">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                {% if u.role == 'User' %}
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning text-nowrap">Kuraatoriks</button>
+                                                {% else %}
+                                                    <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">Õigused</button>
+                                                {% endif %}
+                                            </form>
+
+                                            <form action="{{ url_for('admin_delete_user', user_id=u.id) }}" method="POST" onsubmit="return confirm('Oled kindel? Kõik kasutaja materjalid kustutatakse samuti!');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="btn btn-sm btn-danger">Kustuta</button>
+                                            </form>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
